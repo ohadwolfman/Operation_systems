@@ -8,7 +8,6 @@ void PitagoricalThree(int argc, char *argv[]);
 int main(int argc, char *argv[]) {
     CreateOutputFile();
     PitagoricalThree(argc, argv);
-    PitagoricalThree(argc, argv);
     printf("Task1 completed\n");
     return 0;
 }
