@@ -42,10 +42,10 @@ pythagorean.o: $(PYTHAGOREAN_SRC)
 
 # execute client server
 run: server client
-	./server & sleep 1; ./client
+	./server & sleep 1; ./client $(SEED)
 
 # execute test
-test: test_task1
+test_run: test_task1
 	./test_task1 3 4 5
 	./test_task1 5 12 13
 	./test_task1 7 8 9
