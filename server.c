@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 #include "pythagorean.h"
 
-#define PORT 8080
+#define PORT 9090
 #define MAX_PENDING 10
 #define TIMEOUT_SEC 10
 
@@ -32,11 +32,9 @@ void handle_client(int client_socket) {
         if(received_count % 3 == 0){
             if (is_pythagorean_triple(buffer[0], buffer[1], buffer[2])) {
                 send(client_socket, "YES\n", 4, 0);
-                sleep(1);
                 received_count=0;
             } else {
                 send(client_socket, "NO\n", 3, 0);
-                sleep(1);
                 received_count=0;
             }
         }
@@ -67,6 +65,7 @@ int main() {
     }
 
     printf("Server listening...\n");
+    fflush(stdout);
 
     while (1) {
         int client_socket = accept(server_socket, NULL, NULL);
@@ -76,6 +75,7 @@ int main() {
         }
 
         printf("Client connected\n");
+        fflush(stdout);
         handle_client(client_socket);
     }
 
