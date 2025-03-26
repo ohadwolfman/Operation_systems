@@ -4,7 +4,8 @@
 #include <arpa/inet.h>
 #include <time.h>
 
-#define PORT 8080
+#define PORT 8237
+#define END_SIGNAL -1
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -14,9 +15,8 @@ int main(int argc, char *argv[]) {
     }
 
     unsigned int seed = (unsigned int) atoi(argv[1]);
-    srand(seed); // Set the random seed for client
+    srand(seed);
 
-    // Creating the socket
     int client_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (client_socket < 0) {
         perror("Error creating socket");
@@ -34,8 +34,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Send 3 random numbers and receive the response
-    for (int i = 0; i < 2; i++) { //loop twice, once for random numbers, once for good numbers
+    for (int i = 0; i < 2; i++) {
         unsigned char sides[3];
         if (i == 0) {
             for (int j = 0; j < 3; j++) {
@@ -57,7 +56,6 @@ int main(int argc, char *argv[]) {
             fflush(stdout);
         }
 
-        // Receive the server's response
         char response[256];
         int bytes_received = recv(client_socket, response, sizeof(response) - 1, 0);
         if (bytes_received > 0) {
@@ -67,16 +65,16 @@ int main(int argc, char *argv[]) {
         } else if (bytes_received == 0) {
             printf("Server closed the connection.\n");
             fflush(stdout);
-            break; // Exit the loop if the server closes the connection
+            break;
         } else {
-            perror("Error receiving data");
-            break; // Exit the loop on error
+            perror("Error receiving server's data");
+            break;
         }
     }
 
-    // Shut down sending side
-    if (shutdown(client_socket, SHUT_WR) < 0) {
-        perror("Error shutting down write direction");
+    int endSignal = END_SIGNAL;
+    if (send(client_socket, &endSignal, sizeof(endSignal), 0) <= 0) {
+        perror("Error sending end signal");
     }
 
     close(client_socket);

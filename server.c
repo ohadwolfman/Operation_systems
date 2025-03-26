@@ -5,41 +5,58 @@
 #include <arpa/inet.h>
 #include "pythagorean.h"
 
-#define PORT 9090
+#define PORT 8237
 #define MAX_PENDING 10
-#define TIMEOUT_SEC 10
-
-int sample_count = 0;
+#define END_SIGNAL -1
 
 void handle_client(int client_socket) {
-    unsigned char buffer[3] = {0}; // Buffer for the 3 elements
+    unsigned char buffer[3] = {0};
     int received_count = 0;
+    int client_closed = 0;
 
-    while (1) {
-        unsigned char side;
+    while (!client_closed) {
+        int side; // Change to int to receive END_SIGNAL
         int bytes_received = recv(client_socket, &side, sizeof(side), 0);
 
-        if (bytes_received <= 0){
-            perror("Error receiving data");
+        if (bytes_received <= 0) {
+            if (bytes_received == 0) {
+                printf("Client disconnected.\n");
+            } else {
+                perror("Error receiving data");
+            }
             close(client_socket);
+            client_closed = 1;
             break;
         }
 
-        buffer[received_count % 3] = side;
+        if (side == END_SIGNAL) {
+            printf("End signal received from client.\n");
+            close(client_socket);
+            client_closed = 1;
+            break;
+        }
+
+        buffer[received_count % 3] = (unsigned char)side;
         received_count++;
 
-        // sending answer after 3 numbers
-        if(received_count % 3 == 0){
+        if (received_count % 3 == 0) {
             if (is_pythagorean_triple(buffer[0], buffer[1], buffer[2])) {
-                send(client_socket, "YES\n", 4, 0);
-                received_count=0;
+                if (send(client_socket, "YES\n", 4, 0) < 0) {
+                    perror("Error sending data");
+                    close(client_socket);
+                    client_closed = 1;
+                    break;
+                }
             } else {
-                send(client_socket, "NO\n", 3, 0);
-                received_count=0;
+                if (send(client_socket, "NO\n", 3, 0) < 0) {
+                    perror("Error sending data");
+                    close(client_socket);
+                    client_closed = 1;
+                    break;
+                }
             }
         }
     }
-    close(client_socket); // ?
 }
 
 int main() {
@@ -54,6 +71,13 @@ int main() {
     server_addr.sin_port = htons(PORT);
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
+    int opt = 1;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt");
+        close(server_socket);
+        return 1;
+    }
+
     if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("Error binding socket");
         return 1;
@@ -64,17 +88,17 @@ int main() {
         return 1;
     }
 
-    printf("Server listening...\n");
+    printf("Server listening on port %d...\n", PORT);
     fflush(stdout);
 
     while (1) {
         int client_socket = accept(server_socket, NULL, NULL);
         if (client_socket < 0) {
-            perror("Error accepting connection\n");
+            perror("Error accepting connection");
             continue;
         }
 
-        printf("Client connected\n");
+        printf("Client connected.\n");
         fflush(stdout);
         handle_client(client_socket);
     }
