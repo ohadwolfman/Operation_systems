@@ -34,8 +34,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    printf("Client connected successfully, waiting before sending data...\n");
+    fflush(stdout);
+    sleep(1);
+
+    unsigned char sides[3];
     for (int i = 0; i < 2; i++) {
-        unsigned char sides[3];
         if (i == 0) {
             for (int j = 0; j < 3; j++) {
                 sides[j] = (unsigned char)(rand() % 15);
@@ -47,6 +51,9 @@ int main(int argc, char *argv[]) {
         }
 
         for (int j = 0; j < 3; j++) {
+//            printf("Sending: %d\n", sides[j]);
+//            fflush(stdout);
+
             if (send(client_socket, &sides[j], sizeof(sides[j]), 0) < 0) {
                 perror("Error sending data");
                 close(client_socket);

@@ -18,6 +18,9 @@ void handle_client(int client_socket) {
         int side; // Change to int to receive END_SIGNAL
         int bytes_received = recv(client_socket, &side, sizeof(side), 0);
 
+        printf("Received: %d (bytes received: %d)\n", side, bytes_received);
+        fflush(stdout);
+
         if (bytes_received <= 0) {
             if (bytes_received == 0) {
                 printf("Client disconnected.\n");

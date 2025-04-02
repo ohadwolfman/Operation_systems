@@ -42,6 +42,7 @@ pythagorean.o: $(PYTHAGOREAN_SRC)
 
 # execute client server
 run: server client
+	pkill server || true
 	./server & sleep 1; ./client $(SEED)
 
 # execute test
