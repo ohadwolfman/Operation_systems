@@ -5,7 +5,7 @@
 #include <time.h>
 
 #define PORT 8237
-#define END_SIGNAL -1
+#define END_SIGNAL 0
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {

@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -7,19 +6,16 @@
 
 #define PORT 8237
 #define MAX_PENDING 10
-#define END_SIGNAL -1
+#define END_SIGNAL 0
 
-void handle_client(int client_socket) {
+int handle_client(int client_socket) {
     unsigned char buffer[3] = {0};
     int received_count = 0;
     int client_closed = 0;
 
     while (!client_closed) {
-        int side; // Change to int to receive END_SIGNAL
+        unsigned char side;
         int bytes_received = recv(client_socket, &side, sizeof(side), 0);
-
-        printf("Received: %d (bytes received: %d)\n", side, bytes_received);
-        fflush(stdout);
 
         if (bytes_received <= 0) {
             if (bytes_received == 0) {
@@ -28,41 +24,41 @@ void handle_client(int client_socket) {
                 perror("Error receiving data");
             }
             close(client_socket);
-            client_closed = 1;
-            break;
+            return -2;  // error code
         }
 
         if (side == END_SIGNAL) {
             printf("End signal received from client.\n");
             close(client_socket);
-            client_closed = 1;
-            break;
+            return END_SIGNAL;
         }
 
-        buffer[received_count % 3] = (unsigned char)side;
+        buffer[received_count % 3] = side;
         received_count++;
 
         if (received_count % 3 == 0) {
+            printf("Received triple: %d %d %d\n", buffer[0], buffer[1], buffer[2]);
             if (is_pythagorean_triple(buffer[0], buffer[1], buffer[2])) {
                 if (send(client_socket, "YES\n", 4, 0) < 0) {
                     perror("Error sending data");
                     close(client_socket);
-                    client_closed = 1;
-                    break;
+                    return -3;
                 }
             } else {
                 if (send(client_socket, "NO\n", 3, 0) < 0) {
                     perror("Error sending data");
                     close(client_socket);
-                    client_closed = 1;
-                    break;
+                    return -3;
                 }
             }
         }
     }
+    return 0;
 }
 
 int main() {
+    printf("Lets start\n");
+    fflush(stdout);
     int server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket < 0) {
         perror("Error creating socket");
@@ -91,10 +87,11 @@ int main() {
         return 1;
     }
 
-    printf("Server listening on port %d...\n", PORT);
+    printf("Server listening on port %d\n", PORT);
     fflush(stdout);
 
-    while (1) {
+    int server_closed = 0;
+    while (!server_closed) {
         int client_socket = accept(server_socket, NULL, NULL);
         if (client_socket < 0) {
             perror("Error accepting connection");
@@ -103,9 +100,14 @@ int main() {
 
         printf("Client connected.\n");
         fflush(stdout);
-        handle_client(client_socket);
+        int result = handle_client(client_socket);
+        if (result == END_SIGNAL) {
+            printf("Client ended session using END_SIGNAL.\n");
+            server_closed=1;
+        } else if (result < 0) {
+            printf("Client session ended with error code: %d\n", result);
+        }
     }
-
     close(server_socket);
     return 0;
 }
