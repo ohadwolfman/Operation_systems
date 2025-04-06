@@ -138,10 +138,10 @@ int main() {
                         slot_found = 1;
                         break;
                     }
-                    if (!slot_found) {
-                        fprintf(stderr, "Max clients reached, rejecting more connections\n");
-                        close(new_socket);
-                    }
+                }
+                if (!slot_found) {
+                    fprintf(stderr, "Max clients reached, rejecting more connections\n");
+                    close(new_socket);
                 }
             }
         }
