@@ -3,27 +3,19 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <time.h>
 #include <poll.h>
 #include <sys/socket.h>
-#include <sys/wait.h>
+
 #include "pythagorean.h"
 
 #define PORT 8237
 #define MAX_PENDING 10
 #define MAX_CLIENTS 10
 #define END_SIGNAL 0
-#define LOG_FILE "server.log"
 #define BUFFER_SIZE 3
 
-//struct pollfd {
-//    int   fd;
-//    short events; //Events we are interested in
-//    short revents; //Events that actually happened
-//};
-
 typedef struct {
-    unsigned char buffer[3];
+    unsigned char buffer[BUFFER_SIZE];
     int received_count;
 } ClientState;
 
@@ -41,9 +33,9 @@ int handle_client(int client_socket, ClientState *state) {
             return END_SIGNAL;
         }
         else {
-            state->buffer[state->received_count % 3] = side;
+            state->buffer[state->received_count % BUFFER_SIZE] = side;
             state->received_count++;
-            if (state->received_count % 3 == 0) {
+            if (state->received_count % BUFFER_SIZE == 0) {
                 printf("Received triple from client (socket %d): %d %d %d \n",client_socket, state->buffer[0], state->buffer[1], state->buffer[2]);
                 char response[5];
                 if (is_pythagorean_triple(state->buffer[0], state->buffer[1], state->buffer[2])) {
@@ -68,25 +60,13 @@ int handle_client(int client_socket, ClientState *state) {
     return 1;
 }
 
-void log_message(const char *message) {
-    FILE *logfile = fopen(LOG_FILE, "a");
-    if (logfile != NULL) {
-        time_t timer;
-        char buffer[26];
-        struct tm* tm_info;
-
-        time(&timer);
-        tm_info = localtime(&timer);
-
-        strftime(buffer, 26, "%Y-%m-%d %H:%M:%S", tm_info);
-        fprintf(logfile, "[%s] %s\n", buffer, message);
-        fclose(logfile);
-    } else {
-        perror("Error opening log file");
-    }
-}
+//struct pollfd { /this struct defined in poll.h. written here for better understanding
+//    int   fd;
+//    short events; //Events we are interested in
+//    short revents; }; //Events that actually happened
 
 int main() {
+    //  Setting the socket
     int server_fd;
     struct sockaddr_in server_addr;
     struct pollfd fds[MAX_CLIENTS + 1];
@@ -143,20 +123,22 @@ int main() {
         if (fds[0].revents & POLLIN) {
             struct sockaddr_in client_addr;
             socklen_t client_len = sizeof(client_addr);
-            int new_socket = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+            int new_socket = accept(server_fd, (struct sockaddr *) &client_addr, &client_len);
             if (new_socket < 0) {
                 perror("accept error");
             } else {
                 printf("New client connected\n");
-                // Adding the new socket to the pollfd array
+                // Adding the new socket to the pollfd arra
+                int slot_found = 0;
                 for (int i = 1; i <= MAX_CLIENTS; ++i) { //Search the first empty cell in pollfd array
                     if (fds[i].fd == -1) {
                         fds[i].fd = new_socket;
                         fds[i].events = POLLIN;
                         num_clients++;
+                        slot_found = 1;
                         break;
                     }
-                    if (i == MAX_CLIENTS) {
+                    if (!slot_found) {
                         fprintf(stderr, "Max clients reached, rejecting more connections\n");
                         close(new_socket);
                     }
@@ -167,29 +149,13 @@ int main() {
         // Check if there is data from existing clients
         for (int i = 1; i <= MAX_CLIENTS; ++i) {
             if (fds[i].fd != -1 && (fds[i].revents & POLLIN)) {
-                handle_client(fds[i].fd, &client_states_Array[i - 1]);
+                int result = handle_client(fds[i].fd, &client_states_Array[i - 1]);
+                if (result == 0 || result == END_SIGNAL || result == -1) { //Detect if a client has disconnected
+                    close(fds[i].fd);
+                    fds[i].fd = -1;
+                    num_clients--;
+                }
             }
         }
     }
-
-//    int server_closed = 0;
-//    while (!server_closed) {
-//        int client_socket = accept(server_socket, NULL, NULL);
-//        if (client_socket < 0) {
-//            perror("Error accepting connection");
-//            continue;
-//        }
-//
-//        printf("Client connected.\n");
-//        fflush(stdout);
-//        int result = handle_client(client_socket);
-//        if (result == END_SIGNAL) {
-//            printf("Client ended session using END_SIGNAL.\n");
-//            server_closed=1;
-//        } else if (result < 0) {
-//            printf("Client session ended with error code: %d\n", result);
-//        }
-//    }
-    close(server_fd);
-    return 0;
 }

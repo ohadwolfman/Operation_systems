@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "Task1.c"
+#include "single_client.c"
 
 void CreateOutputFile();
 //void PitagoricalThree(int a, int b, int c);
