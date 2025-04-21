@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include <sys/socket.h>
+#include <fcntl.h>
 
 #include "pythagorean.h"
 
@@ -21,6 +22,14 @@ typedef struct {
 
 ClientState client_states_Array[MAX_CLIENTS];
 
+int log_fd;
+void close_log_file() {
+    if (log_fd >= 0) {
+        close(log_fd);
+        printf("Log file closed.\n");
+    }
+}
+
 int handle_client(int client_socket, ClientState *state) {
     unsigned char side;
     ssize_t bytes_received = recv(client_socket, &side, sizeof(side), 0);
@@ -28,7 +37,7 @@ int handle_client(int client_socket, ClientState *state) {
 
     if (bytes_received > 0) {
         if (side == END_SIGNAL) {
-            printf("End signal received from client (socket %d).\n", client_socket);
+            dprintf(log_fd, "End signal received from client (socket %d).\n", client_socket);
             close(client_socket);
             return END_SIGNAL;
         }
@@ -36,7 +45,8 @@ int handle_client(int client_socket, ClientState *state) {
             state->buffer[state->received_count % BUFFER_SIZE] = side;
             state->received_count++;
             if (state->received_count % BUFFER_SIZE == 0) {
-                printf("Received triple from client (socket %d): %d %d %d \n",client_socket, state->buffer[0], state->buffer[1], state->buffer[2]);
+                dprintf(log_fd, "Received triple from client (socket %d): %d %d %d \n",
+                        client_socket, state->buffer[0], state->buffer[1], state->buffer[2]);
                 char response[5];
                 if (is_pythagorean_triple(state->buffer[0], state->buffer[1], state->buffer[2])) {
                     strcpy(response, "YES\n");
@@ -66,13 +76,25 @@ int handle_client(int client_socket, ClientState *state) {
 //    short revents; }; //Events that actually happened
 
 int main() {
+    // automatic closing log file in the end of execution
+    atexit(close_log_file);
+
+    log_fd = open("server_log.txt", O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (log_fd < 0) {
+        perror("Failed to open log file");
+        return 1;
+    }
+    dup2(log_fd, STDOUT_FILENO);
+    dup2(log_fd, STDERR_FILENO);
+
+
     //  Setting the socket
     int server_fd;
     struct sockaddr_in server_addr;
     struct pollfd fds[MAX_CLIENTS + 1];
     int num_clients = 0;
 
-    printf("Lets start\n");
+    dprintf(log_fd, "Lets start\n");
     fflush(stdout);
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
@@ -109,7 +131,7 @@ int main() {
         fds[i].fd = -1; // Setting all cells in an array as inactive socket
     }
 
-    printf("Server listening on port %d using poll()\n", PORT);
+    dprintf(log_fd, "Server listening on port %d using poll()\n", PORT);
     fflush(stdout);
 
     while (1) {
@@ -127,7 +149,7 @@ int main() {
             if (new_socket < 0) {
                 perror("accept error");
             } else {
-                printf("New client connected\n");
+                dprintf(log_fd, "New client connected\n");
                 // Adding the new socket to the pollfd arra
                 int slot_found = 0;
                 for (int i = 1; i <= MAX_CLIENTS; ++i) { //Search the first empty cell in pollfd array

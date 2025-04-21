@@ -20,21 +20,21 @@ void send_triangle(int sockfd, unsigned char a, unsigned char b, unsigned char c
         printf("Thread %lu sent: %d\n", pthread_self(), sides[i]);
         fflush(stdout);
     }
-
-    char response[256];
-    int bytes_received = recv(sockfd, response, sizeof(response) - 1, 0);
-    if (bytes_received > 0) {
-        response[bytes_received] = '\0';
-        printf("Thread %lu received: %s", pthread_self(), response);
-        fflush(stdout);
-    } else if (bytes_received == 0) {
-        printf("Server closed the connection for thread %lu.\n", pthread_self());
-        fflush(stdout);
-        exit(0);
-    } else {
-        perror("Error receiving data");
-        exit(1);
-    }
+//
+//    char response[256];
+//    int bytes_received = recv(sockfd, response, sizeof(response) - 1, 0);
+//    if (bytes_received > 0) {
+//        response[bytes_received] = '\0';
+//        printf("Thread %lu received: %s", pthread_self(), response);
+//        fflush(stdout);
+//    } else if (bytes_received == 0) {
+//        printf("Server closed the connection for thread %lu.\n", pthread_self());
+//        fflush(stdout);
+//        exit(0);
+//    } else {
+//        perror("Error receiving data");
+//        exit(1);
+//    }
 }
 
 void* client_thread(void* arg) {
@@ -70,10 +70,14 @@ void* client_thread(void* arg) {
         int bytes_received = recv(sockfd, response, sizeof(response) - 1, 0);
         if (bytes_received > 0) {
             response[bytes_received] = '\0';
-            printf("Thread %ld received: %s", pthread_self(), response);
+
+            printf("Thread %lu sent the numbers: %d, %d, %d. Server answer: %s\n",
+                   pthread_self(), a, b, c,
+                   (strstr(response, "YES") ? "YES" :
+                    strstr(response, "NO")  ? "NO"  : response));
             fflush(stdout);
         } else if (bytes_received == 0) {
-            printf("Thread %ld: Server closed connection.\n", pthread_self());
+            printf("Thread %lu: Server closed connection.\n", pthread_self());
             break;
         } else {
             perror("Error receiving data");
