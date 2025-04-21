@@ -24,9 +24,10 @@ ClientState client_states_Array[MAX_CLIENTS];
 
 int log_fd;
 void close_log_file() {
+    dprintf(3, "Server stopped receiving requests. Closing log.");
+    fsync(3);
     if (log_fd >= 0) {
         close(log_fd);
-        dprintf(log_fd, "Log file closed.\n");
     }
 }
 
@@ -37,7 +38,8 @@ int handle_client(int client_socket, ClientState *state) {
 
     if (bytes_received > 0) {
         if (side == END_SIGNAL) {
-            dprintf(log_fd, "End signal received from client (socket %d).\n", client_socket);
+            printf("End signal received from client (socket %d).\n", client_socket);
+            fflush(stdout);
             close(client_socket);
             return END_SIGNAL;
         }
@@ -51,20 +53,24 @@ int handle_client(int client_socket, ClientState *state) {
                 } else {
                     strcpy(response, "NO\n");
                 }
-                dprintf(log_fd, "Received triple from client (socket %d): %d %d %d. The answer: %s\n",
-                        client_socket, state->buffer[0], state->buffer[1], state->buffer[2],response);
+                printf("Received triple from client (socket %d): %d %d %d. The answer: %s\n",
+                       client_socket, state->buffer[0], state->buffer[1], state->buffer[2], response);
+                fflush(stdout);
                 if (send(client_socket, response, strlen(response), 0) < 0) {
                     perror("Error sending data to client");
+                    fflush(stdout);
                     return -1;
                 }
             }
         }
     }
     else if (bytes_received == 0) {
-        dprintf(log_fd, "Client disconnected (socket %d).\n", client_socket);
+        printf("Client disconnected (socket %d).\n", client_socket);
+        fflush(stdout);
         return 0;
     } else {
         perror("Error receiving data from client");
+        fflush(stdout);
         return -1;
     }
     return 1;
@@ -79,23 +85,25 @@ int main() {
     // automatic closing log file in the end of execution
     atexit(close_log_file);
 
-    log_fd = open("server_log.txt", O_WRONLY | O_CREAT | O_TRUNC , 0644);
+    log_fd = open("server.log", O_WRONLY | O_CREAT | O_TRUNC , 0644);
     if (log_fd < 0) {
         perror("Failed to open log file");
         return 1;
     }
+
+    // redirect stdout and stderr to log file
     dup2(log_fd, STDOUT_FILENO);
     dup2(log_fd, STDERR_FILENO);
 
-
-    //  Setting the socket
+    // Setting the socket
     int server_fd;
     struct sockaddr_in server_addr;
     struct pollfd fds[MAX_CLIENTS + 1];
     int num_clients = 0;
 
-    dprintf(log_fd, "Lets start\n");
+    printf("Let's start\n");
     fflush(stdout);
+
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         perror("Error creating socket");
@@ -109,7 +117,7 @@ int main() {
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("setsockopt");
-        close(server_fd );
+        close(server_fd);
         return 1;
     }
 
@@ -131,7 +139,7 @@ int main() {
         fds[i].fd = -1; // Setting all cells in an array as inactive socket
     }
 
-    dprintf(log_fd, "Server listening on port %d using poll()\n", PORT);
+    printf("Server listening on port %d using poll()\n", PORT);
     fflush(stdout);
 
     while (1) {
@@ -141,7 +149,7 @@ int main() {
             exit(EXIT_FAILURE);
         }
 
-        // Checking for a new connection
+        // New connection
         if (fds[0].revents & POLLIN) {
             struct sockaddr_in client_addr;
             socklen_t client_len = sizeof(client_addr);
@@ -149,8 +157,9 @@ int main() {
             if (new_socket < 0) {
                 perror("accept error");
             } else {
-                dprintf(log_fd, "New client connected\n");
-                // Adding the new socket to the pollfd arra
+                printf("New client connected (socket: %d)\n",new_socket);
+                fflush(stdout);
+
                 int slot_found = 0;
                 for (int i = 1; i <= MAX_CLIENTS; ++i) { //Search the first empty cell in pollfd array
                     if (fds[i].fd == -1) {
@@ -162,7 +171,8 @@ int main() {
                     }
                 }
                 if (!slot_found) {
-                    dprintf(log_fd, "Max clients reached, rejecting more connections\n");
+                    printf("Max clients reached, rejecting more connections\n");
+                    fflush(stdout);
                     close(new_socket);
                 }
             }
@@ -172,7 +182,7 @@ int main() {
         for (int i = 1; i <= MAX_CLIENTS; ++i) {
             if (fds[i].fd != -1 && (fds[i].revents & POLLIN)) {
                 int result = handle_client(fds[i].fd, &client_states_Array[i - 1]);
-                if (result == 0 || result == END_SIGNAL || result == -1) { //Detect if a client has disconnected
+                if (result == 0 || result == END_SIGNAL || result == -1) {
                     close(fds[i].fd);
                     fds[i].fd = -1;
                     num_clients--;
