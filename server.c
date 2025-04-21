@@ -26,7 +26,7 @@ int log_fd;
 void close_log_file() {
     if (log_fd >= 0) {
         close(log_fd);
-        printf("Log file closed.\n");
+        dprintf(log_fd, "Log file closed.\n");
     }
 }
 
@@ -45,14 +45,14 @@ int handle_client(int client_socket, ClientState *state) {
             state->buffer[state->received_count % BUFFER_SIZE] = side;
             state->received_count++;
             if (state->received_count % BUFFER_SIZE == 0) {
-                dprintf(log_fd, "Received triple from client (socket %d): %d %d %d \n",
-                        client_socket, state->buffer[0], state->buffer[1], state->buffer[2]);
                 char response[5];
                 if (is_pythagorean_triple(state->buffer[0], state->buffer[1], state->buffer[2])) {
                     strcpy(response, "YES\n");
                 } else {
                     strcpy(response, "NO\n");
                 }
+                dprintf(log_fd, "Received triple from client (socket %d): %d %d %d. The answer: %s\n",
+                        client_socket, state->buffer[0], state->buffer[1], state->buffer[2],response);
                 if (send(client_socket, response, strlen(response), 0) < 0) {
                     perror("Error sending data to client");
                     return -1;
@@ -61,7 +61,7 @@ int handle_client(int client_socket, ClientState *state) {
         }
     }
     else if (bytes_received == 0) {
-        printf("Client disconnected (socket %d).\n", client_socket);
+        dprintf(log_fd, "Client disconnected (socket %d).\n", client_socket);
         return 0;
     } else {
         perror("Error receiving data from client");
@@ -79,7 +79,7 @@ int main() {
     // automatic closing log file in the end of execution
     atexit(close_log_file);
 
-    log_fd = open("server_log.txt", O_WRONLY | O_CREAT | O_APPEND, 0644);
+    log_fd = open("server_log.txt", O_WRONLY | O_CREAT | O_TRUNC , 0644);
     if (log_fd < 0) {
         perror("Failed to open log file");
         return 1;
@@ -162,7 +162,7 @@ int main() {
                     }
                 }
                 if (!slot_found) {
-                    fprintf(stderr, "Max clients reached, rejecting more connections\n");
+                    dprintf(log_fd, "Max clients reached, rejecting more connections\n");
                     close(new_socket);
                 }
             }
