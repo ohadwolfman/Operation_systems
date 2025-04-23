@@ -20,21 +20,6 @@ void send_triangle(int sockfd, unsigned char a, unsigned char b, unsigned char c
         printf("Thread %lu sent: %d\n", pthread_self(), sides[i]);
         fflush(stdout);
     }
-//
-//    char response[256];
-//    int bytes_received = recv(sockfd, response, sizeof(response) - 1, 0);
-//    if (bytes_received > 0) {
-//        response[bytes_received] = '\0';
-//        printf("Thread %lu received: %s", pthread_self(), response);
-//        fflush(stdout);
-//    } else if (bytes_received == 0) {
-//        printf("Server closed the connection for thread %lu.\n", pthread_self());
-//        fflush(stdout);
-//        exit(0);
-//    } else {
-//        perror("Error receiving data");
-//        exit(1);
-//    }
 }
 
 void* client_thread(void* arg) {
@@ -83,8 +68,7 @@ void* client_thread(void* arg) {
             perror("Error receiving data");
             break;
         }
-
-        usleep(200000); // 0.2 שניות הפסקה
+        usleep(200000); // 0.2 seconds sleep
     }
 
     int endSignal = END_SIGNAL;
