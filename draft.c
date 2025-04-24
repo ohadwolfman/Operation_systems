@@ -101,12 +101,12 @@ int dup2_useage() {
 }
 
 int main() {
-//    run_single_thred(&print_myName);
-//    run_single_thred(&follow_fork);
-//    run_single_thred(&run_hello);
-//    run_single_thred(&send_ping);
-//    run_single_thred(&memory_allocation);
-//    run_single_thred(&dup2_useage);
+    run_single_thred(&print_myName);
+    run_single_thred(&follow_fork);
+    run_single_thred(&run_hello);
+    run_single_thred(&send_ping);
+    run_single_thred(&memory_allocation);
+    run_single_thred(&dup2_useage);
     run_single_thred(&dup2_useage);
 
     return 0;
