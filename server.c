@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <stdarg.h>
 #include "thread_pool.h"
+#include <errno.h>
 
 #include "pythagorean.h"
 
@@ -58,45 +59,52 @@ void handle_client(void *arg) {
             ssize_t bytes_received = recv(client_socket, &sides[received], 3 - received, 0);
 
             if (bytes_received < 0) {
-                safe_log("Error receiving data from client\n");
-                close(client_socket);
-                pthread_exit(NULL);
-
-            } else if (bytes_received == 0) {    // client disconnected
-                safe_log("Client disconnected (socket %d).\n", client_socket);
+                if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                    safe_log("Timeout while receiving data from client (socket %d).\n", client_socket);
+                } else {
+                    perror("recv error");
+                    safe_log("recv error from client (socket %d).\n", client_socket);
+                }
                 close(client_socket);
                 pthread_exit(NULL);
             }
-            else{ // bytes_received > 0
-                char response[5];
-                if (sides[received] == END_SIGNAL) {
+
+            if (bytes_received == 0) {
+                safe_log("Client disconnected abruptly (socket %d).\n", client_socket);
+                close(client_socket);
+                pthread_exit(NULL);
+            }
+
+            // check if END_SIGNAL arrived
+            for (int i = 0; i < bytes_received; ++i) {
+                if (sides[received + i] == END_SIGNAL) {
                     safe_log("End signal received from client (socket %d).\n", client_socket);
                     close(client_socket);
                     pthread_exit(NULL);
                 }
-                else{
-                    // checking if pythagorean triple
-                    if (is_pythagorean_triple(sides[0], sides[1], sides[2])) {
-                        strcpy(response, "YES\n");
-                    } else {
-                        strcpy(response, "NO\n");
-                    }
-
-                    received += bytes_received;
-                }
-                if(received==3){
-                    // printing to log
-                    safe_log("Received triple from client (socket %d): %d %d %d. The answer: %s",
-                           client_socket, sides[0], sides[1], sides[2], response);
-
-                    // send the answer to the client
-                    if (send(client_socket, response, strlen(response), 0) < 0) {
-                        safe_log("Error sending data to client");
-                        close(client_socket);
-                        pthread_exit(NULL);
-                    }
-                }
             }
+
+            received += bytes_received;
+        }
+
+        // reached here only if 3 full bytes received and none of them were END_SIGNAL
+        char response[5];
+        if (is_pythagorean_triple(sides[0], sides[1], sides[2])) {
+            strcpy(response, "YES\n");
+        } else {
+            strcpy(response, "NO\n");
+        }
+
+        // print to log
+        safe_log("Received triple from client (socket %d): %d %d %d. The answer: %s",
+                 client_socket, sides[0], sides[1], sides[2], response);
+
+        // send the answer
+        if (send(client_socket, response, strlen(response), 0) < 0) {
+            perror("send error");
+            safe_log("Error sending data to client (socket %d).\n", client_socket);
+            close(client_socket);
+            pthread_exit(NULL);
         }
     }
 }
@@ -182,6 +190,16 @@ int main() {
             pthread_mutex_lock(&log_mutex);
             perror("accept error");
             pthread_mutex_unlock(&log_mutex);
+            continue;
+        }
+
+        // Set timeout of 5 seconds for recv()
+        struct timeval timeout;
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
+        if (setsockopt(new_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+            safe_log("Failed to set timeout on client socket (socket %d).\n", new_socket);
+            close(new_socket);
             continue;
         }
 

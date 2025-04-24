@@ -8,7 +8,7 @@
 #define PORT 8237
 #define END_SIGNAL 0
 #define NUM_THREADS 5
-#define TRIANGLES_PER_THREAD 2
+#define TRIANGLES_PER_THREAD 5
 
 void send_triangle(int sockfd, unsigned char a, unsigned char b, unsigned char c) {
     unsigned char sides[3] = {a, b, c};
@@ -45,9 +45,9 @@ void* client_thread(void* arg) {
     }
 
     for (int i = 0; i < TRIANGLES_PER_THREAD; i++) {
-        unsigned char a = rand() % 30 + 1;
-        unsigned char b = rand() % 30 + 1;
-        unsigned char c = rand() % 30 + 1;
+        unsigned char a = rand() % 35 + 1;
+        unsigned char b = rand() % 35 + 1;
+        unsigned char c = rand() % 35 + 1;
 
         send_triangle(sockfd, a, b, c);
 
