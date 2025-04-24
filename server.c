@@ -15,6 +15,7 @@
 #define MAX_PENDING 10
 #define MAX_CLIENTS 10
 #define END_SIGNAL 0
+#define THREAD_POOL_SIZE 10
 
 typedef struct {
     int client_fd;
@@ -44,9 +45,9 @@ void close_log_file() {
     }
 }
 
-void *handle_client(void *arg) {
+void handle_client(void *arg) {
     int client_socket = *((int *)arg);
-    free(arg);
+    free(arg); // Freeing memory in passed args
 
     while (1) {
         unsigned char sides[3];
@@ -167,6 +168,12 @@ int main() {
         return 1;
     }
 
+    ThreadPool *pool = thread_pool_create(THREAD_POOL_SIZE);
+    if (!pool) {
+        perror("Failed to create thread pool");
+        exit(EXIT_FAILURE);
+    }
+
     while (1) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
@@ -190,18 +197,8 @@ int main() {
         }
         *client_socket_ptr = new_socket;
 
-        pthread_t thread;
-        if (pthread_create(&thread, NULL, handle_client, client_socket_ptr) != 0) {
-            pthread_mutex_lock(&log_mutex);
-            perror("pthread_create");
-            pthread_mutex_unlock(&log_mutex);
-            free(client_socket_ptr);
-            close(new_socket);
-        } else {
-            pthread_detach(thread);  // So that we don't have to call pthread_join
-        }
+        thread_pool_add_task(pool, handle_client, client_socket_ptr);
     }
-
     pthread_mutex_destroy(&log_mutex);
     close(server_fd);
     return 0;

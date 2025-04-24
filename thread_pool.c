@@ -1,6 +1,7 @@
 #include "thread_pool.h"
 #include <pthread.h>
-
+#include <stdlib.h>
+#include <stdio.h>
 
 typedef struct Task {
     void (*function)(void *arg); //Pointer to a function to be called when the task is executed.
@@ -61,19 +62,35 @@ void* thread_worker(void *arg) {
 
 ThreadPool* thread_pool_create(int num_threads) {
     ThreadPool *pool = malloc(sizeof(ThreadPool));
-    if (!pool) return NULL;
+    if (!pool){
+        perror("Failed to allocate ThreadPool\n");
+        return NULL;
+    }
 
     pool->thread_count = num_threads;
     pool->threads = malloc(sizeof(pthread_t) * num_threads);
     if (!pool->threads) {
+        perror("Failed to allocate threads array\n");
         free(pool);
         return NULL;
     }
     pool->task_queue_head = pool->task_queue_tail = NULL;
     pool->stop = 0;
 
-    pthread_mutex_init(&pool->queue_mutex, NULL);
-    pthread_cond_init(&pool->queue_cond, NULL);
+    if (pthread_mutex_init(&pool->queue_mutex, NULL) != 0) {
+        perror("Mutex init failed\n");
+        free(pool->threads);
+        free(pool);
+        return NULL;
+    }
+
+    if (pthread_cond_init(&pool->queue_cond, NULL) != 0) {
+        perror("Cond init failed\n");
+        pthread_mutex_destroy(&pool->queue_mutex);
+        free(pool->threads);
+        free(pool);
+        return NULL;
+    }
 
     for (int i = 0; i < num_threads; i++) {
         pthread_create(&pool->threads[i], NULL, thread_worker, (void *)pool);
@@ -83,7 +100,10 @@ ThreadPool* thread_pool_create(int num_threads) {
 
 void thread_pool_add_task(ThreadPool *pool, void (*function)(void *), void *arg) {
     Task *task = malloc(sizeof(Task));
-    if (!task) return;
+    if (!task){
+        perror("Failed to allocate task\n");
+        return;
+    }
 
     task->function = function;
     task->arg = arg;
