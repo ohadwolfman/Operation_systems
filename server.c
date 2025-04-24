@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdarg.h>
+#include "thread_pool.h"
 
 #include "pythagorean.h"
 
