@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdarg.h>
 
 #include "pythagorean.h"
 
@@ -13,24 +14,30 @@
 #define MAX_PENDING 10
 #define MAX_CLIENTS 10
 #define END_SIGNAL 0
-#define BUFFER_SIZE 3
-
-typedef struct {
-    unsigned char buffer[BUFFER_SIZE];
-    int received_count;
-} ClientState;
-
-ClientState client_states_Array[MAX_CLIENTS];
 
 typedef struct {
     int client_fd;
     struct sockaddr_in client_addr;
 } client_info_t;
 
+pthread_mutex_t log_mutex; // for locking while writing log file
+
+void safe_log(const char *format, ...) {
+    pthread_mutex_lock(&log_mutex);
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+    fflush(stdout);
+    pthread_mutex_unlock(&log_mutex);
+}
+
 int log_fd;
 void close_log_file() {
+    pthread_mutex_lock(&log_mutex);
     dprintf(3, "Server stopped receiving requests. Closing log.");
     fsync(3);
+    pthread_mutex_unlock(&log_mutex);
     if (log_fd >= 0) {
         close(log_fd);
     }
@@ -49,21 +56,19 @@ void *handle_client(void *arg) {
             ssize_t bytes_received = recv(client_socket, &sides[received], 3 - received, 0);
 
             if (bytes_received < 0) {
-                perror("Error receiving data from client\n");
+                safe_log("Error receiving data from client\n");
                 close(client_socket);
                 pthread_exit(NULL);
 
             } else if (bytes_received == 0) {    // client disconnected
-                printf("Client disconnected (socket %d).\n", client_socket);
-                fflush(stdout);
+                safe_log("Client disconnected (socket %d).\n", client_socket);
                 close(client_socket);
                 pthread_exit(NULL);
             }
             else{ // bytes_received > 0
                 char response[5];
                 if (sides[received] == END_SIGNAL) {
-                    printf("End signal received from client (socket %d).\n", client_socket);
-                    fflush(stdout);
+                    safe_log("End signal received from client (socket %d).\n", client_socket);
                     close(client_socket);
                     pthread_exit(NULL);
                 }
@@ -79,13 +84,12 @@ void *handle_client(void *arg) {
                 }
                 if(received==3){
                     // printing to log
-                    printf("Received triple from client (socket %d): %d %d %d. The answer: %s",
+                    safe_log("Received triple from client (socket %d): %d %d %d. The answer: %s",
                            client_socket, sides[0], sides[1], sides[2], response);
-                    fflush(stdout);
 
                     // send the answer to the client
                     if (send(client_socket, response, strlen(response), 0) < 0) {
-                        perror("Error sending data to client");
+                        safe_log("Error sending data to client");
                         close(client_socket);
                         pthread_exit(NULL);
                     }
@@ -101,7 +105,9 @@ int main() {
 
     log_fd = open("server.log", O_WRONLY | O_CREAT | O_TRUNC , 0644);
     if (log_fd < 0) {
+        pthread_mutex_lock(&log_mutex);
         perror("Failed to open log file");
+        pthread_mutex_unlock(&log_mutex);
         return 1;
     }
 
@@ -109,8 +115,7 @@ int main() {
     dup2(log_fd, STDOUT_FILENO);
     dup2(log_fd, STDERR_FILENO);
 
-    printf("Let's start\n");
-    fflush(stdout);
+    safe_log("Let's start\n");
 
     // Set up server socket
     int server_fd;
@@ -118,13 +123,17 @@ int main() {
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
+        pthread_mutex_lock(&log_mutex);
         perror("Error creating socket");
+        pthread_mutex_unlock(&log_mutex);
         return 1;
     }
 
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        pthread_mutex_lock(&log_mutex);
         perror("setsockopt");
+        pthread_mutex_unlock(&log_mutex);
         close(server_fd);
         return 1;
     }
@@ -134,33 +143,47 @@ int main() {
     server_addr.sin_port = htons(PORT);
 
     if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        pthread_mutex_lock(&log_mutex);
         perror("Error binding socket");
+        pthread_mutex_unlock(&log_mutex);
         return 1;
     }
 
     if (listen(server_fd, MAX_PENDING) < 0) {
+        pthread_mutex_lock(&log_mutex);
         perror("Error listening on socket");
+        pthread_mutex_unlock(&log_mutex);
         return 1;
     }
 
-    printf("Server listening on port %d with threads.\n", PORT);
-    fflush(stdout);
+    safe_log("Server listening on port %d with threads.\n", PORT);
+
+    // initialize mutex
+    if (pthread_mutex_init(&log_mutex, NULL) != 0) {
+        pthread_mutex_lock(&log_mutex);
+        perror("Mutex init failed");
+        pthread_mutex_unlock(&log_mutex);
+        return 1;
+    }
 
     while (1) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
         int new_socket = accept(server_fd, (struct sockaddr *) &client_addr, &client_len);
         if (new_socket < 0) {
+            pthread_mutex_lock(&log_mutex);
             perror("accept error");
+            pthread_mutex_unlock(&log_mutex);
             continue;
         }
 
-        printf("New client connected (socket: %d)\n", new_socket);
-        fflush(stdout);
+        safe_log("New client connected (socket: %d)\n", new_socket);
 
         int *client_socket_ptr = malloc(sizeof(int));
         if (client_socket_ptr == NULL) {
+            pthread_mutex_lock(&log_mutex);
             perror("malloc");
+            pthread_mutex_unlock(&log_mutex);
             close(new_socket);
             continue;
         }
@@ -168,7 +191,9 @@ int main() {
 
         pthread_t thread;
         if (pthread_create(&thread, NULL, handle_client, client_socket_ptr) != 0) {
+            pthread_mutex_lock(&log_mutex);
             perror("pthread_create");
+            pthread_mutex_unlock(&log_mutex);
             free(client_socket_ptr);
             close(new_socket);
         } else {
@@ -176,6 +201,7 @@ int main() {
         }
     }
 
+    pthread_mutex_destroy(&log_mutex);
     close(server_fd);
     return 0;
 }
