@@ -6,6 +6,40 @@
 #define PORT 8237
 #define END_SIGNAL 0
 
+void send_and_receive(int client_socket, unsigned char a, unsigned char b, unsigned char c) {
+    unsigned char sides[3] = {a, b, c};
+
+    printf("Sending triple: %d, %d, %d\n", a, b, c);
+    fflush(stdout);
+
+    // Send all three numbers at once
+    for (int j = 0; j < 3; j++) {
+        if (send(client_socket, &sides[j], sizeof(sides[j]), 0) < 0) {
+            perror("Error sending data");
+            close(client_socket);
+            exit(1);
+        }
+    }
+
+    // Receive response
+    char response[256];
+    int bytes_received = recv(client_socket, response, sizeof(response) - 1, 0);
+    if (bytes_received > 0) {
+        response[bytes_received] = '\0';
+        printf("Server response: %s", response);
+        fflush(stdout);
+    } else if (bytes_received == 0) {
+        printf("Server closed the connection.\n");
+        fflush(stdout);
+        close(client_socket);
+        exit(0);
+    } else {
+        perror("Error receiving server's data");
+        close(client_socket);
+        exit(1);
+    }
+}
+
 int main(int argc, char *argv[]) {
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <seed>\n", argv[0]);
@@ -33,53 +67,30 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Client connected successfully, waiting before sending data...\n");
+    printf("Client connected successfully.\n");
     fflush(stdout);
-    sleep(1);
 
-    unsigned char sides[3];
-    for (int i = 0; i < 2; i++) {
-        if (i == 0) {
-            for (int j = 0; j < 3; j++) {
-                sides[j] = (unsigned char)(rand() % 15);
-            }
-        } else {
-            sides[0] = 5;
-            sides[1] = 12;
-            sides[2] = 13;
-        }
+    // Send random triple (avoid 0)
+    unsigned char a = (unsigned char)(1 + rand() % 31);
+    unsigned char b = (unsigned char)(1 + rand() % 31);
+    unsigned char c = (unsigned char)(1 + rand() % 31);
+    send_and_receive(client_socket, a, b, c);
 
-        for (int j = 0; j < 3; j++) {
-//            printf("Sending: %d\n", sides[j]);
-//            fflush(stdout);
+    // Send another triple
+    a = (unsigned char)(1 + rand() % 31);
+    b = (unsigned char)(1 + rand() % 31);
+    c = (unsigned char)(1 + rand() % 31);
+    send_and_receive(client_socket, a, b, c);
 
-            if (send(client_socket, &sides[j], sizeof(sides[j]), 0) < 0) {
-                perror("Error sending data");
-                close(client_socket);
-                return 1;
-            }
-            printf("Sent: %d\n", sides[j]);
-            fflush(stdout);
-        }
+    // Send known valid triple 3,4,5
+    send_and_receive(client_socket, 3, 4, 5);
 
-        char response[256];
-        int bytes_received = recv(client_socket, response, sizeof(response) - 1, 0);
-        if (bytes_received > 0) {
-            response[bytes_received] = '\0';
-            printf("Server response: %s", response);
-            fflush(stdout);
-        } else if (bytes_received == 0) {
-            printf("Server closed the connection.\n");
-            fflush(stdout);
-            break;
-        } else {
-            perror("Error receiving server's data");
-            break;
-        }
-    }
+    // Send another known valid triple 6,8,10
+    send_and_receive(client_socket, 6, 8, 10);
 
-    int endSignal = END_SIGNAL;
-    if (send(client_socket, &endSignal, sizeof(endSignal), 0) <= 0) {
+    // Send END_SIGNAL to close session
+    unsigned char end_signal = END_SIGNAL;
+    if (send(client_socket, &end_signal, sizeof(end_signal), 0) <= 0) {
         perror("Error sending end signal");
     }
 

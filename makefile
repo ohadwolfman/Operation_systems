@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -pthread
+SEED = 42
 
 # relevant files
 SERVER_SRC = server.c
@@ -54,4 +55,4 @@ run_single: server single_client
 	./server & sleep 1; ./single_client $(SEED)
 
 clean:
-	rm -f *.o *.txt server client single_client
+	rm -f *.o *.txt server client single_client draft test

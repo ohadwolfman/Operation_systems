@@ -18,7 +18,7 @@ typedef struct ThreadPool {
 
     pthread_mutex_t queue_mutex;
     pthread_cond_t queue_cond; //condition variable that allows the processes to "sleep" until there is a new task
-    // A procession waits on it when the queue is empty, and someone else "wakes" it up when a task comes in
+    // A process waits on it when the queue is empty, and someone else "wakes" it up when a task comes in
 
     int stop; // if stop = 1, release all thread
 } ThreadPool;
@@ -29,12 +29,13 @@ void* thread_worker(void *arg) {
     while (1) {
         pthread_mutex_lock(&pool->queue_mutex);
 
-        while (pool->task_queue_head == NULL) {
+        while (pool->task_queue_head == NULL) { // Checks if there are no tasks currently
             if (pool->stop) { // Prevent threads from leaving when there are more tasks in the queue
                 pthread_mutex_unlock(&pool->queue_mutex);
                 return NULL;
             }
-            pthread_cond_wait(&pool->queue_cond, &pool->queue_mutex);
+            pthread_cond_wait(&pool->queue_cond, &pool->queue_mutex); // process wait until "pthread_cond_signal"
+            // While sleeping, the mutex is automatically released so as not to block others.
         }
 
         if (pool->stop) {
@@ -42,6 +43,7 @@ void* thread_worker(void *arg) {
             break;
         }
 
+        // Treats the first task in the queue
         Task *task = pool->task_queue_head;
         if (task) {
             pool->task_queue_head = task->next;
@@ -49,11 +51,12 @@ void* thread_worker(void *arg) {
                 pool->task_queue_tail = NULL;
         }
 
+        // Allow other processes to enter the queue at the same time as the task is being executed
         pthread_mutex_unlock(&pool->queue_mutex);
 
         if (task) {
             task->function(task->arg);
-            free(task);
+            free(task); //after sending the args to the function
         }
     }
 
